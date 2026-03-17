@@ -50,6 +50,9 @@ export default function App() {
   const [searchTerm, setSearchTerm] = useState('');
   const [selectedCategory, setSelectedCategory] = useState<'todos' | 'masculino' | 'feminino' | 'unissex'>('todos');
   const [isSuccessModalOpen, setIsSuccessModalOpen] = useState(false);
+  const [dbError, setDbError] = useState<string | null>(null);
+
+  const isConfigured = Boolean((import.meta as any).env.VITE_SUPABASE_URL && (import.meta as any).env.VITE_SUPABASE_ANON_KEY);
 
   // Load from Supabase on mount
   useEffect(() => {
@@ -72,19 +75,30 @@ export default function App() {
   }, [isLoggedIn]);
 
   const fetchProducts = async () => {
-    const { data, error } = await supabase.from('products').select('*').order('created_at', { ascending: false });
-    if (data && !error) {
-      setProducts(data.map(mapDbProduct));
+    try {
+      const { data, error } = await supabase.from('products').select('*').order('created_at', { ascending: false });
+      if (error) throw error;
+      if (data) {
+        setProducts(data.map(mapDbProduct));
+      }
+    } catch (err: any) {
+      console.error('Error fetching products:', err);
+      setDbError(err.message);
     }
   };
 
   const fetchSettings = async () => {
-    const { data, error } = await supabase.from('store_settings').select('*').eq('id', 1).single();
-    if (data && !error) {
-      setContactState(data.contact_state);
-      setIsOnlinePaymentEnabled(data.is_online_payment_enabled);
-      setIsPaymentOnDeliveryEnabled(data.is_payment_on_delivery_enabled);
-      setPaymentSettings(data.payment_settings as PaymentSettings);
+    try {
+      const { data, error } = await supabase.from('store_settings').select('*').eq('id', 1).single();
+      if (error && error.code !== 'PGRST116') throw error;
+      if (data) {
+        setContactState(data.contact_state);
+        setIsOnlinePaymentEnabled(data.is_online_payment_enabled);
+        setIsPaymentOnDeliveryEnabled(data.is_payment_on_delivery_enabled);
+        setPaymentSettings(data.payment_settings as PaymentSettings);
+      }
+    } catch (err: any) {
+      console.error('Error fetching settings:', err);
     }
   };
 
@@ -365,6 +379,22 @@ export default function App() {
       setIsLoginModalOpen(true);
     }
   };
+
+  if (!isConfigured) {
+    return (
+      <div className="min-h-screen bg-black text-white flex flex-col items-center justify-center p-6 text-center">
+        <Logo size="lg" className="mb-8" />
+        <h1 className="text-2xl font-serif text-gold mb-4">Configuração Necessária</h1>
+        <p className="text-white/60 max-w-md mb-8">
+          Para que o Essenza D&apos;Or funcione na Vercel, você precisa configurar as variáveis de ambiente 
+          <strong> VITE_SUPABASE_URL</strong> e <strong>VITE_SUPABASE_ANON_KEY</strong>.
+        </p>
+        <div className="bg-white/5 border border-white/10 p-4 rounded-lg text-sm font-mono text-left">
+          Dica: Acesse Project Settings &gt; Environment Variables no painel da Vercel.
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="min-h-screen bg-black text-white font-sans selection:bg-gold selection:text-black">
